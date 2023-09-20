@@ -1,0 +1,7 @@
+pauser:
+  js:
+    js/pauser.js: {}
+  dependencies:
+    - core/once
+    - core/jquery
+    - core/drupalSettings

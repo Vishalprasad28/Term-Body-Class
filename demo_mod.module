@@ -1,0 +1,159 @@
+<?php
+
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Entity\BundleEntityFormBase;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\KernelTests\Core\Entity\EntityBundleFieldTest;
+
+/**
+ * Implements hoook_preprocess_page().
+ */
+
+function demo_mod_form_alter($form, $form_state, $form_id) {
+//   dd($op);
+// $data = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties([
+// 	'include_term' => 1,
+// ]);
+// $bundles = \Drupal::service('entity_type.bundle.info')->getBundleInfo('taxonomy_term');
+// dd($bundles);
+}
+
+function demo_mod_entity_bundle_field_info(EntityTypeInterface $entity_type, $bundle, array $base_field_definitions) {
+	// dump($bundle);
+	if ($entity_type->id() == 'taxonomy_vocabulary') {
+		$fields['include_vocab'] = BaseFieldDefinition::create('boolean')
+		->setLabel(t('Include this vocab to use its terms as class'))
+		->setDescription(t('Whether this vocabulary has to be included or not?'))
+		->setDefaultValue(0)
+		->setTargetEntityTypeId('taxonomy_term')
+		->setTargetBundle($bundle)
+		->setDisplayOptions('form', array(
+		  'type' => 'boolean_checkbox',
+		  'weight' => 10,
+		));
+	  return $fields;
+	}
+}
+
+function demo_mod_entity_base_field_info(EntityTypeInterface $entity_type) {
+// \Drupal::messenger()->addMessage($entity_type->id());
+  if ($entity_type->id() == 'taxonomy_term') {
+	// \Drupal::messenger()->addMessage('hii');
+	$fields['include_term'] = BaseFieldDefinition::create('boolean')
+	  ->setLabel(t('Include term as class'))
+    ->setDescription(t('Whether this term has to be included or not as class name?'))
+    ->setDefaultValue(0)
+	  ->setDisplayOptions('form', array(
+		'type' => 'boolean_checkbox',
+		'weight' => 10,
+	  ));
+	return $fields;
+	}
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function demo_mod_form_field_config_edit_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+
+	// $entity_type = $form_state->getFormObject()->getEntity()->get('entity_type');
+	// $bundle = $form_state->getFormObject()->getEntity()->get('bundle');
+
+	// $entityFieldManager = \Drupal::service('entity_field.manager');
+  // $fields = $entityFieldManager->getFieldDefinitions($entity_type, $bundle);
+	// foreach ($fields as $field_name => $field_definition) {
+  //   if (!empty($field_definition->getTargetBundle())) {
+  //     $bundleFields[$field_name]['type'] = $field_definition->getType();
+  //     $bundleFields[$field_name]['definition'] = $field_definition;
+  //     $bundleFields[$field_name]['label'] = $field_definition->getLabel();
+  //   }
+  // }
+
+	$field_storage = $form_state->getFormObject()->getEntity();
+	if ($field_storage->getType() == 'entity_reference') {
+	  if ($field_storage->getSettings()['target_type'] == 'taxonomy_term') {
+			$checked = $form_state->getFormObject()->getEntity()->get('third_party_settings');
+			$form['add_body_class'] = [
+				'#type' => 'checkbox',
+				'#title' => t('Add term name as body class'),
+				'#default_value' => isset($checked['checked']) ? $checked['checked'] : 0,
+			];
+
+			$form['actions']['submit']['#submit'][] = 'demo_mod_term_body_class_save';
+	  }
+	}
+}
+
+function demo_mod_term_body_class_save($form, $form_state) {
+	\Drupal::messenger()->addMessage('submitted');
+	$form_state->getFormObject()->getEntity()->set('third_party_settings', [
+		'checked' => $form_state->getValue('add_body_class'),
+	])->save();
+	$entity_type = $form_state->getFormObject()->getEntity()->get('entity_type');
+	$bundle = $form_state->getFormObject()->getEntity()->get('bundle');
+	Cache::invalidateTags([$entity_type . '_list:' . $bundle]);
+}
+
+/**
+ * Implements_hook_preprocess_html().
+ */
+function demo_mod_preprocess_html(&$variables) {
+	$node = \Drupal::routeMatch()->getParameter('node');
+	$user = \Drupal::routeMatch()->getParameter('user');
+	if ($node) {
+		$names = get_terms($node);
+		$variables['attributes']['class'] = array_unique(array_merge($variables['attributes']['class'], $names));
+	}
+	elseif ($user) {
+		$names = get_terms($user);
+		$variables['attributes']['class'] = array_unique(array_merge($variables['attributes']['class'], $names));
+	}
+}
+
+function get_terms(EntityInterface $entity) {
+	$fields = $entity->getFieldDefinitions();
+	$term_fields = [];
+  $names = [];
+	foreach ($fields as $field_definition) {
+    if (is_term_field($field_definition)) {
+      $term_fields[] = $field_definition;
+    }
+  }
+  if ($term_fields) {
+	  foreach ($term_fields as $term) {
+			$names = array_merge($names, get_term_names($entity->get($term->getName())->referencedEntities()));
+		}
+	}
+
+	return $names;
+}
+
+function get_term_names(array $terms) {
+	foreach ($terms as $term) {
+		if ($term->get('include_term')->value == 1) {
+		  $names[] = str_replace([' ', '_'], '-', strtolower($term->getName()));
+		}
+	}
+
+	return $names ?? [];
+}
+
+function is_term_field($field_definition) {
+  $result = !empty($field_definition->getTargetBundle()) &&
+	(isset($field_definition->getSettings()['target_type']) &&
+	$field_definition->getSettings()['target_type'] == 'taxonomy_term' &&
+	(isset($field_definition->get('third_party_settings')['checked']) &&
+	$field_definition->get('third_party_settings')['checked'] == 1));
+
+	return $result;
+}
+
+function demo_mod_uninstall() {
+	$count = count(\Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadMultiple());
+	field_purge_batch($count);
+}

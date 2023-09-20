@@ -1,0 +1,15 @@
+demo_mod.settings_form:
+  path: '/demo-mod'
+  defaults:
+    _title: 'demo_mod settings'
+    _form: 'Drupal\demo_mod\Form\SettingsForm'
+  requirements:
+    _permission: 'administer demo_mod configuration'
+
+demo_mod.example:
+  path: '/demo-mod/example'
+  defaults:
+    _title: 'Example'
+    _controller: '\Drupal\demo_mod\Controller\DemoModController::build'
+  requirements:
+    _permission: 'access content'

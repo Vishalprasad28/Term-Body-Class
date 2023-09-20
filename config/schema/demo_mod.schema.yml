@@ -1,0 +1,8 @@
+# Schema for the configuration files of the demo_mod module.
+demo_mod.settings:
+  type: config_object
+  label: 'demo_mod settings'
+  mapping:
+    image:
+      type: file
+      label: 'Image File'

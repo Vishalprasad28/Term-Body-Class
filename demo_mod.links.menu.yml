@@ -1,0 +1,6 @@
+demo_mod.settings_form:
+  title: 'demo_mod'
+  description: 'Configure demo_mod.'
+  parent: system.admin_config_system
+  route_name: demo_mod.settings_form
+  weight: 10
